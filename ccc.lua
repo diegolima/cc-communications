@@ -86,18 +86,18 @@ end
 
 
 -- Messaging
--- Messaging is accomplished using 4 types of message:
+-- Messaging is accomplished using 3 types of message:
 --   nfo: Generic informational message. Intended to carry data to be displayed on the remote terminal
---   req: Request for data. The target host should reply to this message. Usually the response will be a string.
---   cmd: Command. The target host should run the command locally and reply whether or not it had success.
+--   req: Execution Request. The target host should run the command specified by message and reply to this message with
+--        the return of the command. 
 --   rep: Reply to a request or command. Replies to requests are strings and replies to commands are booleans.
 --
 -- The first 3 characters of a message determine what kind of message it is, while the following characters are 
 -- the message itself. So in order to send a nfo containing the message "Hello World" you would send the following
 -- string: "nfoHello World"
 --
--- You can either use the function sendMessage to send the messages or use the ccc.sendNfo, ccc.sendReq, ccc.sendCmd
--- and ccc.sendRep wrappers to make things easier.
+-- You can either use the function sendMessage to send the messages or use the ccc.sendNfo, ccc.sendReq,and ccc.sendRep 
+-- wrappers to make things easier.
 --
 -- Receiving messages is accomplished by calling the function receiveMessage. It can be used without arguments or you
 -- can check for a specific message type and/or specific sender. You may also choose to decode/decrypt the received message.
@@ -129,10 +129,6 @@ function sendNfo(target,message,crypto,key)
 end
 function sendReq(target,message,crypto,key)
   message = "req" .. message
-  ccc.sendMessage(target,message,crypto,key)
-end
-function sendCmd(target,message,crypto,key)
-  message = "cmd" .. message
   ccc.sendMessage(target,message,crypto,key)
 end
 function sendRep(target,message,crypto,key)
@@ -185,6 +181,7 @@ end
 
 -- os.loadAPI("ccc")
 -- function main()
+--   local reply = nil
 --   ccc.init()
 --   ccc.sendNfo(nil, os.getComputerID() .. " is online" )
 --   while true do
@@ -194,10 +191,14 @@ end
 --       print("Info received: " .. senderId .. ": "  .. message )
 --     elseif mType == "req" then
 --       print("Request received: " .. senderId .. ": " .. message)
+--       reply = loadstring(message)()
+--       if reply then
+--         ccc.sendRep(senderId,reply)
+--       else
+--         ccc.sendRep(senderId,"nil")
+--       end
 --     elseif mType == "rep" then
 --       print("Reply received: " .. senderId .. ": " .. message)
---     elseif cmdType == "cmd" then
---       print("Command Received: " .. senderId .. ": " .. message)
 --     end
 --   end
 -- end
