@@ -1,13 +1,45 @@
+-- Initializes Available Network Devices
+-- Tries to initialize any modem connected to the computer. Optionally
+-- accepts a side as a parameter. If provided only that side will be
+-- initialized.
+--
+-- Parameters: modemside (string)
+function init(modemside)
+  local i = 0
+  local side = {}
+  
+  if modemside then
+    side[0] = modemside
+  else  
+    side[0] = "top"
+    side[1] = "bottom"
+    side[2] = "left"
+    side[3] = "right"
+    side[4] = "front"
+    side[5] = "back"
+  end
+  
+  for i = 0, table.getn(side) do
+    if peripheral.isPresent(side[i]) then
+      if peripheral.getType(side[i]) == "modem" then
+        if rednet.isOpen(side[i]) == false then
+          rednet.open(side[i])
+        end
+      end
+    end
+  end
+end
+
 -- Encodes Data using base64
 -- Useful for transmitting (not confidential) data while preserving special characters
--- Also might serve as a (mild) deterrent to non-tech-inclined people from listening
--- and/or meddling your communication channels
+-- Also might serve as a (mild) deterrent to non-tech-inclined people from listening in
+-- and/or meddling with your communication channels
 --
 -- Parameters: data (string)
 -- Returns: string (base64 encoded data)
-function ccc.b64Encode(data)
+function b64Encode(data)
     local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-    return ((data:gsub('.', function(x) 
+    return ((data:gsub('.', function(x)
         local r,b='',x:byte()
         for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
         return r;
@@ -21,12 +53,12 @@ end
 
 -- Decodes Data using base64
 -- Useful for transmitting (not confidential) data while preserving special characters
--- Also might serve as a (mild) deterrent to non-tech-inclined people from listening
--- and/or meddling your communication channels
+-- Also might serve as a (mild) deterrent to non-tech-inclined people from listening in
+-- and/or meddling with your communication channels
 --
 -- Parameters: data (b64 encoded string)
 -- Returns: string (decoded data)
-function ccc.b64Decode(data)
+function b64Decode(data)
     local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
     data = string.gsub(data, '[^'..b..'=]', '')
     return (data:gsub('.', function(x)
@@ -43,11 +75,11 @@ function ccc.b64Decode(data)
 end
 
 -- TODO: Implement proper cryptography; For now this is just a wrapper around base64 encoding/decoding
-function ccc.encrypt(data,key)
+function encrypt(data,key)
   local a = ccc.b64Encode(data)
   return a
 end
-function ccc.decrypt(data,key)
+function decrypt(data,key)
   local a = ccc.b64Decode(data)
   return a
 end
@@ -64,10 +96,10 @@ end
 -- the message itself. So in order to send a nfo containing the message "Hello World" you would send the following
 -- string: "nfoHello World"
 --
--- You can either use the function ccc.sendMessage to send the messages or use the ccc.sendNfo, ccc.sendReq, ccc.sendCmd
+-- You can either use the function sendMessage to send the messages or use the ccc.sendNfo, ccc.sendReq, ccc.sendCmd
 -- and ccc.sendRep wrappers to make things easier.
 --
--- Receiving messages is accomplished by calling the function ccc.receiveMessage. It can be used without arguments or you
+-- Receiving messages is accomplished by calling the function receiveMessage. It can be used without arguments or you
 -- can check for a specific message type and/or specific sender. You may also choose to decode/decrypt the received message.
 
 -- Sends a message to the network
@@ -76,48 +108,46 @@ end
 --   message: the message to be transmitted
 --   crypto: Default is to send in cleartext / 1 - base64 encode message / 2 - encrypt message using the given key
 --   key: key used to encrypt messages; ignored if crypto is not set to 2
-function ccc.sendMessage(target,message,crypto,key)
+function sendMessage(target,message,crypto,key)
   if crypto == 1 then
     message = ccc.b64Encode(message)
   elseif crypto == 2 then
     message = ccc.encrypt(message,key)
   end
 
-  if target == 0 then
-    print("Broadcasting: " .. message)
-    rednet.broadcast(message)
-  else
-    print("Sending message to " .. target) 
+  if target then
     rednet.send(target,message)
+  else
+    rednet.broadcast(message)
   end
 end
 
 -- Wrappers
-function ccc.sendNfo(target,message,crypto,key)
+function sendNfo(target,message,crypto,key)
   message = "nfo" .. message
   ccc.sendMessage(target,message,crypto,key)
 end
-function ccc.sendReq(target,message,crypto,key)
+function sendReq(target,message,crypto,key)
   message = "req" .. message
   ccc.sendMessage(target,message,crypto,key)
 end
-function ccc.sendCmd(target,message,crypto,key)
+function sendCmd(target,message,crypto,key)
   message = "cmd" .. message
   ccc.sendMessage(target,message,crypto,key)
 end
-function ccc.sendRep(target,message,crypto,key)
+function sendRep(target,message,crypto,key)
   message = "rep" .. message
   ccc.sendMessage(target,message,crypto,key)
 end
 
 
-function ccc.receiveMessage(sender,mType,crypto,key)
+function receiveMessage(sender,mType,crypto,key)
     local match = 0
-    while match ~= 2 do    
+    local senderId, message, distance, mType, rmType = nil
 
-      local senderId, message, distance = rednet.receive()
-      local rmType = nil
-  
+    while match ~= 2 do
+      senderId, message, distance = rednet.receive()
+
       -- Break down the received message
       if crypto == 1 then
         rmType  = string.sub(dec(message),1,3)
@@ -145,31 +175,30 @@ function ccc.receiveMessage(sender,mType,crypto,key)
       else
         match = match + 1
       end
-
     end
-    return senderId,mType,message,distance
+    return senderId,rmType,message,distance
 end
 
 
 
--- Sample main() function
---   function main()
---     if rednet.isOpen(modemlocation) == false then
---       rednet.open(modemlocation)
---     end
---     sendNfo(0,"I am online" )
---     while true do
---       print("Waiting for new messages...")
---       senderId,mType,message,distance = ccc.receiveMessage()
---       if mType == "nfo" then
---         print("Message from " .. senderId .. " reads: " .. message )
---       elseif mType == "req" then 
---         print("Request received: " .. message)
---       elseif mType == "rep" then
---         print("Reply received: " .. message)
---       elseif cmdType == "cmd" then
---         print("Command Received: " .. message)
---       end
+-- Sample Usage:
+
+-- os.loadAPI("ccc")
+-- function main()
+--   ccc.init()
+--   ccc.sendNfo(nil, os.getComputerID() .. " is online" )
+--   while true do
+--     print("Waiting for new messages...")
+--     senderId,mType,message,distance = ccc.receiveMessage()
+--     if mType == "nfo" then
+--       print("Info received: " .. senderId .. ": "  .. message )
+--     elseif mType == "req" then
+--       print("Request received: " .. senderId .. ": " .. message)
+--     elseif mType == "rep" then
+--       print("Reply received: " .. senderId .. ": " .. message)
+--     elseif cmdType == "cmd" then
+--       print("Command Received: " .. senderId .. ": " .. message)
 --     end
 --   end
---   main()
+-- end
+-- main()
